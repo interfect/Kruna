@@ -45,3 +45,8 @@ $RECYCLE.BIN/
 Network Trash Folder
 Temporary Items
 .apdisk
+
+# Nodejs stuff
+node_modules
+out
+npm-debug.log
