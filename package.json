@@ -1,28 +1,28 @@
 {
-  "name": "electron-quick-start",
+  "name": "kruna",
   "version": "1.0.0",
-  "description": "A minimal Electron application",
+  "description": "Cloud music user agent",
   "main": "main.js",
   "scripts": {
     "start": "electron main.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/electron/electron-quick-start.git"
+    "url": "git+https://github.com/interfect/kruna.git"
   },
-  "keywords": [
-    "Electron",
-    "quick",
-    "start",
-    "tutorial"
-  ],
-  "author": "GitHub",
-  "license": "CC0-1.0",
+  "author": "Interfect",
+  "license": "GPL-3.0",
   "bugs": {
-    "url": "https://github.com/electron/electron-quick-start/issues"
+    "url": "https://github.com/interfect/kruna/issues"
   },
-  "homepage": "https://github.com/electron/electron-quick-start#readme",
+  "homepage": "https://github.com/interfect/kruna#readme",
+  "dependencies": {
+    "spotify-web": "git://github.com/sciencepro/node-spotify-web.git#0a9e6bfc3ec53052101c61b4a1bfe550caaf99d6",
+    "av": "^0.4.8",
+    "mp3": "^0.1.0",
+    "nconf": "^0.8.4"
+  },
   "devDependencies": {
-    "electron-prebuilt": "^1.2.0"
+    "electron-prebuilt": "~1.0.2"
   }
 }
