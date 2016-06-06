@@ -5,13 +5,23 @@
 
 const ipc = require('electron').ipcRenderer
 
+// Ask the main thread to feed us some Spotify credentials
+ipc.send('load-credentials')
+
 // Set up login
 var loginButton = document.querySelector('#login')
 loginButton.addEventListener('click', function () {
     ipc.send('spotify-login', document.querySelector('#username').value, document.querySelector('#password').value)
 });
 
-ipc.on('login-successful', function() {
+// Log in with saved credentials
+ipc.on('stored-credentials', (event, username, password) => {
+    document.querySelector('#username').value = username
+    document.querySelector('#password').value = password
+    ipc.send('spotify-login', document.querySelector('#username').value, document.querySelector('#password').value)
+})
+
+ipc.on('login-successful', () => {
     // We successfully logged in to Spotify.
     // Hide the login form
     document.querySelector('.login').style.display = 'none'
