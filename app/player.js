@@ -316,7 +316,7 @@ var Player = (function() {
                 
                 player.ractive.on("scrollPlaylist", function(event) {
                     // Handle scrollwheel in playlist to make it scroll horizontally
-                    document.querySelector(".playlist").scrollLeft += event.dy;                    
+                    document.querySelector(".playlist").scrollLeft += event.original.deltaY;                    
                 });
                 
                 // Watch the nowPlaying state and make actual sound
