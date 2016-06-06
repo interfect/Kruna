@@ -171,7 +171,11 @@ SpotifySource.prototype.start = function() {
         //console.log('SpotifySource: %d bytes in chunk', chunk.length)
         
         // Concatenate new data with any data we had been holding
-        this.buffer = Buffer.concat([this.buffer, chunk])
+        if(this.buffer !== null) {
+            this.buffer = Buffer.concat([this.buffer, chunk])
+        } else {
+            this.buffer = chunk
+        }
         
         if(this.buffer.length >= this.min_buffer_size) {
             // Spit out this data and empty our internal buffer
@@ -179,7 +183,7 @@ SpotifySource.prototype.start = function() {
             
             // We need to convert from Node buffers to Aurora buffers
             this.emit('data', new AV.Buffer(this.buffer))
-            this.buffer = new Buffer(0);
+            this.buffer = null
         } else {
             //console.log('SpotifySource: only have %d bytes. Waiting...', this.buffer.length)
         }
@@ -196,15 +200,12 @@ SpotifySource.prototype.start = function() {
         console.log('SpotifySource: end of stream')
         
         // Emit any remaining data
-        if(this.buffer.length > 0) {
+        if(this.buffer !== null && this.buffer.length > 0) {
             console.log('SpotifySource: emitting %d final bytes', this.buffer.length)
             
-            // Dump to disk
-            fs.writeFile("test.mp3", this.buffer, () => {
-                // We need to convert from Node buffers to Aurora buffers
-                this.emit('data', new AV.Buffer(this.buffer))
-                this.buffer = new Buffer(0);
-            }); 
+            // We need to convert from Node buffers to Aurora buffers
+            this.emit('data', new AV.Buffer(this.buffer))
+            this.buffer = null
             
         }
         this.emit('progress', 100)
@@ -252,41 +253,44 @@ function playTrack(spotify_url, finish_callback) {
         // Make a source
         var spotify_source = new SpotifySource(track)
         
-        // Hack the source into a BufferList, which works much better when
-        // filled with AV.Buffer objects.
-        var buffer_list = new AV.BufferList()
+        var asset = new AV.Asset(spotify_source)
         
-        var playing = false
-        
-        spotify_source.on('data', (chunk) => {
-            buffer_list.append(chunk)
-            
-            if(!playing) {
-                playing = true
-                
-                var player = AV.Player.fromBuffer(buffer_list)
-                
-                player.on('error', (err) => {
-                    console.log('Player Error: ' + err)
-                    throw err
-                })
-                
-                player.on('progress', (msecs) => {
-                    console.log('Progress: %d', msecs)
-                })
-                
-                player.on('end', () => {
-                    // We're done!
-                    console.log('player is done')
-                    finish_callback()
-                })
-                
-                // Ready never fires. Just play.
-                player.play()
-            }
+        asset.on('format', (format) => {
+            console.log('Format decoded: ' + format)
         })
         
-        spotify_source.start()
+        asset.on('duration', (duration) => {
+            console.log('Duration decoded: %d', duration)
+        })
+        
+        asset.on('decodeStart', () => {
+            console.log('Audio decode started')
+        })
+        
+        asset.on('data', (floats) => {
+            //console.log('Got decompressed data: %d samples', floats.length)
+        })
+        
+        var player = new AV.Player(asset)
+        
+        player.on('error', (err) => {
+            console.log('Player Error: ' + err)
+            throw err
+        })
+        
+        player.on('progress', (msecs) => {
+            console.log('Progress: %d', msecs)
+        })
+        
+        player.on('end', () => {
+            // We're done!
+            console.log('player is done')
+            finish_callback()
+        })
+        
+        // Ready never fires. Just play.
+        player.play()
+        
         
     })
 }
