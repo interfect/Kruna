@@ -351,36 +351,6 @@ var Player = (function() {
                     }
                 });
                 
-                // We also need to updat the ractive when we get messages from
-                // the music player itself.
-                
-                // Handle song duration in ms
-                player.ipc.on("player-duration", function(duration) {
-                    
-                    if(isNaN(duration)) {
-                        // Ignore NaN duration
-                        return;
-                    }
-                    
-                    player.ractive.set("playback.duration", duration);
-                });
-                
-                // Handle song progress in ms
-                player.ipc.on("player-progress", function(progress) {
-                    
-                    if(isNaN(progress)) {
-                        // Ignore NaN progress
-                        return;
-                    }
-                    
-                    player.ractive.set("playback.progress", progress);
-                });
-                
-                // And one for when the song ends
-                player.ipc.on("player-ended", function() {
-                    // Go to the next song.
-                    player.skipAhead();
-                });
                 
                 player.ractive.observe("nowPlaying.nonce", function(newValue, oldValue, keypath) {
                     // We watch the nonce because different playlist entries for
@@ -404,6 +374,38 @@ var Player = (function() {
                         player.ipc.send('player-url', newUrl);
                     }
                 });
+                
+                // We also need to updat the ractive when we get messages from
+                // the music player itself.
+                
+                // Handle song duration in ms
+                player.ipc.on("player-duration", function(event, duration) {
+                    
+                    if(isNaN(duration)) {
+                        // Ignore NaN duration
+                        return;
+                    }
+                    
+                    player.ractive.set("playback.duration", duration);
+                });
+                
+                // Handle song progress in ms
+                player.ipc.on("player-progress", function(event, progress) {
+                    
+                    if(isNaN(progress)) {
+                        // Ignore NaN progress
+                        return;
+                    }
+                    
+                    player.ractive.set("playback.progress", progress);
+                });
+                
+                // And one for when the song ends
+                player.ipc.on("player-ended", function(event) {
+                    // Go to the next song.
+                    player.skipAhead();
+                });
+                
                 
                 // Start looking for songs.
                 player.loadSongs("songs.json");

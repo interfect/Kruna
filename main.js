@@ -14,6 +14,7 @@ const fs = require('fs')
 const nconf = require('nconf').file({file: getUserHome() + '/kruna-settings.json'})
 nconf.load()
 
+// We have some code to check to make sure our native libraries loaded OK.
 var Speaker = require('speaker');
 var Readable = require('stream').Readable;
 
@@ -27,11 +28,18 @@ if(device === null) {
     throw new Error("Can't make AudioDevice")
 }
 
+// OK now we know our natives are working.
+
 // Load up Spotify
 const Spotify = require('spotify-web')
 
 // Keep a global spotify session around
 var spotify_session = null
+
+// Keep a global currently playing AV.Player. There should only be one.
+var global_player = null;
+
+// Now do Electron setup.
 
 // Module to control application life.
 const app = electron.app
@@ -239,13 +247,12 @@ SpotifySource.prototype.reset = function() {
 // Make SpotifySource an EventEmitter
 util.inherits(SpotifySource, EventEmitter);
 
-// Play a track from a Spotify URL like spotify:track:6tdp8sdXrXlPV6AZZN2PE8
-// Calls the finish_callback when done.
-function playTrack(spotify_url, finish_callback) {
+ipc.on('player-url', (event, url) => {
+    // Play the given Spotify track.
     
-    console.log('Loading: %s with %s', spotify_url, spotify_session)
+    console.log('Loading: %s with %s', url, spotify_session)
     
-    spotify_session.get(spotify_url, function (err, track) {
+    spotify_session.get(url, function (err, track) {
         if (err) throw err
         
         console.log('Playing: %s - %s', track.artist[0].name, track.name)
@@ -261,17 +268,25 @@ function playTrack(spotify_url, finish_callback) {
         
         asset.on('duration', (duration) => {
             console.log('Duration decoded: %d', duration)
+            // Inform the UI of the song duration
+            event.sender.send('player-duration', duration)
         })
         
         asset.on('decodeStart', () => {
             console.log('Audio decode started')
         })
         
-        asset.on('data', (floats) => {
-            //console.log('Got decompressed data: %d samples', floats.length)
-        })
-        
+        // Make a new Player for the asset.
         var player = new AV.Player(asset)
+        
+        if(global_player !== null) {
+            // If there's already a One True Player, get rid of it.
+            global_player.stop();
+            global_player = null;
+        }
+        
+        // Become the One True Player
+        global_player = player;
         
         player.on('error', (err) => {
             console.log('Player Error: ' + err)
@@ -279,13 +294,14 @@ function playTrack(spotify_url, finish_callback) {
         })
         
         player.on('progress', (msecs) => {
-            console.log('Progress: %d', msecs)
+            // Inform the UI of the playback progress
+            event.sender.send('player-progress', msecs)
         })
         
         player.on('end', () => {
             // We're done!
             console.log('player is done')
-            finish_callback()
+            event.sender.send('player-ended')
         })
         
         // Ready never fires. Just play.
@@ -293,13 +309,18 @@ function playTrack(spotify_url, finish_callback) {
         
         
     })
-}
+})
 
-ipc.on('player-url', (event, url) => {
-    // Play the given Spotify track.
-    // TODO: stop existing ones
-    playTrack(url, () => {
-        // Send the event to the renderer thread which will ask for another track.
-        event.sender.send('player-ended')
-    })
+// Handle requests to pause the music
+ipc.on('player-pause', () => {
+    if(global_player !== null) {
+        global_player.pause()
+    }
+})
+
+// And to play it again
+ipc.on('player-play', () => {
+    if(global_player !== null) {
+        global_player.play()
+    }
 })
