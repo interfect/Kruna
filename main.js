@@ -146,7 +146,7 @@ function SpotifySource(track) {
    
    // Define a min size for the first buffer, because Aurora cries if it's too
    // small to guess the filetype.
-   this.min_buffer_size = 16384 * 100000000;
+   this.min_buffer_size = 16384 * 20;
    
    // And keep a buffer to put stuff in
    this.buffer = new Buffer(0);
@@ -252,31 +252,43 @@ function playTrack(spotify_url, finish_callback) {
         // Make a source
         var spotify_source = new SpotifySource(track)
         
-        // Make an Asset of the source
-        var asset = new AV.Asset(spotify_source)
-       
-        // Make a player from the asset
-        var player = new AV.Player(asset)
-                    
-        player.on('error', (err) => {
-            console.log('Player Error: ' + err)
-            throw err
+        // Hack the source into a BufferList, which works much better when
+        // filled with AV.Buffer objects.
+        var buffer_list = new AV.BufferList()
+        
+        var playing = false
+        
+        spotify_source.on('data', (chunk) => {
+            buffer_list.append(chunk)
+            
+            if(!playing) {
+                playing = true
+                
+                var player = AV.Player.fromBuffer(buffer_list)
+                
+                player.on('error', (err) => {
+                    console.log('Player Error: ' + err)
+                    throw err
+                })
+                
+                player.on('progress', (msecs) => {
+                    console.log('Progress: %d', msecs)
+                })
+                
+                player.on('end', () => {
+                    // We're done!
+                    console.log('player is done')
+                    finish_callback()
+                })
+                
+                // Ready never fires. Just play.
+                player.play()
+            }
         })
         
-        player.on('progress', (msecs) => {
-            console.log('Progress: %d', msecs)
-        })
+        spotify_source.start()
         
-        player.on('end', () => {
-            // We're done!
-            console.log('player is done')
-            finish_callback()
-        })
-        
-        // Ready never fires. Just play.
-        player.play()
-                  
-    });
+    })
 }
 
 ipc.on('play-track', (event, url) => {
