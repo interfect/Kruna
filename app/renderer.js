@@ -27,9 +27,9 @@ ipc.on('login-successful', () => {
     document.querySelector('.login').style.display = 'none'
     // Display the actual player
     document.querySelector('.player').style.display = 'block'
+    
+    // Start up the ractive, with the DIV it uses and the IPC channel to the
+    // actual player backend.
+    Player.start(document.querySelector("#player"), ipc)
+    
 })
-
-var playButton = document.querySelector('#playtrack')
-playButton.addEventListener('click', function () {
-    ipc.send('play-track', document.querySelector('#track').value)
-});

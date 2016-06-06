@@ -44,13 +44,13 @@ let mainWindow
 
 function createWindow () {
     // Create the browser window.
-    mainWindow = new BrowserWindow({width: 800, height: 600})
+    mainWindow = new BrowserWindow({width: 1600, height: 600})
 
     // and load the index.html of the app.
-    mainWindow.loadURL(`file://${__dirname}/index.html`)
+    mainWindow.loadURL(`file://${__dirname}/app/index.html`)
 
     // Open the DevTools.
-    //mainWindow.webContents.openDevTools()
+    mainWindow.webContents.openDevTools()
 
     // Emitted when the window is closed.
     mainWindow.on('closed', function () {
@@ -295,11 +295,11 @@ function playTrack(spotify_url, finish_callback) {
     })
 }
 
-ipc.on('play-track', (event, url) => {
+ipc.on('player-url', (event, url) => {
     // Play the given Spotify track.
     // TODO: stop existing ones
     playTrack(url, () => {
         // Send the event to the renderer thread which will ask for another track.
-        event.sender.send('track-done')
+        event.sender.send('player-ended')
     })
 })

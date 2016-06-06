@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Kruna</title>
+    
+    <!-- Main stylesheet -->
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <!-- Font Awesome stylesheet for icons -->
+    <link rel="stylesheet" href="font-awesome/css/font-awesome.min.css">
+    
+  </head>
+  <body>
+    <div class="login">
+        <p>Log into Spotify!</p>
+        <form>
+            <input id="username" type="text" placeholder="username"/>
+            <input id="password" type="password" placeholder="password"/>
+            <input id="login" type="submit" value="Log in" onclick="return false"/>
+        </form>
+    </div>
+    <!-- This is the actual main UI Ractive div, which starts up once we log in -->
+    <div id="player" class="player" style="display: none;">
+    </div>
+  </body>
+
+  <!-- Load ractive just like in a browser -->
+  <script src="ractive.js"></script>
+  <!-- For mobile support, we do everything with tap events -->
+  <script src="ractive-events-tap.js"></script>
+  <!-- We want to be able to scrollwheel left and right in the playlist -->
+  <script src="ractive-events-mousewheel.js"></script>
+  
+  <script src="player.js"></script>
+  
+  <script>
+    // Load the main renderer process script.
+    require('./renderer.js')
+  </script>
+</html>
