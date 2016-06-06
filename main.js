@@ -263,7 +263,7 @@ SpotifySource.prototype.reset = function() {
 // Make SpotifySource an EventEmitter
 util.inherits(SpotifySource, EventEmitter);
 
-ipc.on('player-url', (event, url) => {
+ipc.on('player-url', (event, url, playNow) => {
     // Play the given Spotify track.
     
     console.log('Loading: %s with %s', url, spotify_session)
@@ -320,8 +320,13 @@ ipc.on('player-url', (event, url) => {
             event.sender.send('player-ended')
         })
         
-        // Ready never fires. Just play.
-        player.play()
+        // Start loading the song
+        player.preload()
+        
+        if(playNow) {
+            // Play only if instructed.
+            player.play()
+        }
         
         
     })
@@ -374,7 +379,11 @@ ipc.on('player-search', (event, query) => {
             
             if(!data.result.tracks[0].hasOwnProperty('track') || !Array.isArray(data.result.tracks[0].track)) {
                 // And that the actual array of track objects is there
-                console.log('Search: Bad track array')
+                console.log('Search: Bad track array/No results')
+                
+                // If it's not, we have no results.
+                event.sender.send('player-songs', [])
+                
                 return
             }
             

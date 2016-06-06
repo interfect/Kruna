@@ -371,9 +371,12 @@ var Player = (function() {
                     if(newUrl !== undefined && newUrl != "") {
                         // Start playing the new song
                         console.log("Make new player");
+
+                        // We don;t want to start immediately unless we think we're playing.
+                        var playNow = (player.ractive.get("playback.state") == "playing");
                         
                         // Say to start playing this URL
-                        player.ipc.send('player-url', newUrl);
+                        player.ipc.send('player-url', newUrl, playNow);
                     }
                 });
                 
