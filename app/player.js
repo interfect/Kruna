@@ -8,7 +8,7 @@ var Player = (function() {
         ractive: null,
         // This holds the initial ractive data
         data: {
-            brandName: "SpacePlayer 2000",
+            brandName: "Kruna",
             // This is the One True Play State, as an index into the playlist array. It gets watched by the code that
             // makes sound come out of the speakers, and set to play different songs.
             playingIndex: 0,
@@ -26,7 +26,9 @@ var Player = (function() {
             // These are the songs we can play
             availableSongs: [],
             // This is the next noince value for songs added to the playlist
-            nextNonce: 0
+            nextNonce: 0,
+            // This is the search query we're sending
+            searchQuery: ""
         },
         
         // This is the event channel through which we communicate with the code
@@ -406,6 +408,18 @@ var Player = (function() {
                     player.skipAhead();
                 });
                 
+                // And now the stuff we need for search
+                player.ractive.on("search", function(event) {
+                    // When someone hits search, send a search event
+                    player.ipc.send("player-search", player.ractive.get("searchQuery"));
+                });
+                
+                // And for when we get a page of songs to show
+                player.ipc.on("player-songs", function(event, songs) {
+                    // Just override all the songs we have already
+                    console.log(songs);
+                    player.ractive.set("availableSongs", songs);
+                })
                 
                 // Start looking for songs.
                 player.loadSongs("songs.json");

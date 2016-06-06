@@ -9,6 +9,7 @@ const mp3 = require('mp3')
 const EventEmitter = require('events').EventEmitter
 const util = require('util')
 const fs = require('fs')
+const xml2js = require('xml2js')
 
 // Load up configuration
 const nconf = require('nconf').file({file: getUserHome() + '/kruna-settings.json'})
@@ -32,6 +33,9 @@ if(device === null) {
 
 // Load up Spotify
 const Spotify = require('spotify-web')
+// And the Spotify URI utilities
+const SpotifyUtil = require('spotify-web/lib/util')
+
 
 // Keep a global spotify session around
 var spotify_session = null
@@ -138,6 +142,18 @@ ipc.on('spotify-login', (event, username, password) => {
         
         // Tell the UI we're ready
         event.sender.send('login-successful')
+        
+        spotify.search('the flashbulb', function (err, xml) {
+            // Try a demo search
+            if (err) throw err
+
+            var parser = new xml2js.Parser()
+            parser.on('end', function (data) {
+                // Save the search results to disk for examination
+                fs.writeFile('search.json', JSON.stringify(data, null, 2))
+            })
+            parser.parseString(xml)
+        })
         
     })
 })
@@ -312,15 +328,90 @@ ipc.on('player-url', (event, url) => {
 })
 
 // Handle requests to pause the music
-ipc.on('player-pause', () => {
+ipc.on('player-pause', (event) => {
     if(global_player !== null) {
         global_player.pause()
     }
 })
 
 // And to play it again
-ipc.on('player-play', () => {
+ipc.on('player-play', (event) => {
     if(global_player !== null) {
         global_player.play()
     }
+})
+
+// And when someone asks for songs
+ipc.on('player-search', (event, query) => {
+    console.log('Search: Initiating search for: %s', query)
+    
+    spotify_session.search(query, function (err, xml) {
+        // Try a demo search
+        if (err) throw err
+
+        var parser = new xml2js.Parser()
+        parser.on('end', function (data) {
+            // Now we have our data. It has a "result" field with a "tracks"
+            // field. In "tracks" we have an array of one object with a "track"
+            // field, which holds the array of actual tracks. And each actual
+            // track has 1-element arrays "id", "title", "artist", and "album",
+            // which are what we need.
+            
+            // We convert those into songs with "title", "album", "artist", and "url".
+            var songs = []
+            
+            if(!data.hasOwnProperty('result')) {
+                // Make sure we have the "result" object
+                console.log('Search: No result')
+                return
+            }
+            
+            if(!data.result.hasOwnProperty('tracks') || !Array.isArray(data.result.tracks) || data.result.tracks.length != 1) {
+                // And that it has tracks
+                console.log('Search: No/bad tracks')
+                return
+            }
+            
+            if(!data.result.tracks[0].hasOwnProperty('track') || !Array.isArray(data.result.tracks[0].track)) {
+                // And that the actual array of track objects is there
+                console.log('Search: Bad track array')
+                return
+            }
+            
+            // Pull out the actual array of tracks
+            var tracks = data.result.tracks[0].track
+            
+            for(var i = 0; i < tracks.length; i++) {
+                // Turn each track into a song
+                var track = tracks[i]
+                
+                // Check the track
+                if(!track.hasOwnProperty('title') || !track.hasOwnProperty('artist') ||
+                    !track.hasOwnProperty('album') || !track.hasOwnProperty('id')) {
+                    console.log('Search: Bad track #%d', i)
+                    return
+                }
+                
+                // Make the song
+                var song = {
+                    'title': track.title[0],
+                    'artist': track.artist[0],
+                    'album': track.album[0],
+                    // The ID needs to be converted from hex to Base 62
+                    // (alphanumeric with case). And be prepended with
+                    // 'spotify:track:'.
+                    'url': SpotifyUtil.id2uri('track', track.id[0])
+                }
+                
+                // Stick it in the list
+                songs.push(song)
+            }
+            
+            // Reply with the songs
+            event.sender.send('player-songs', songs)
+            
+        })
+        parser.parseString(xml)
+    })
+    
 })
