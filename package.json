@@ -18,7 +18,8 @@
   "homepage": "https://github.com/interfect/kruna#readme",
   "dependencies": {
     "av": "^0.4.8",
-    "mp3": "^0.1.0",
+    "limiter": "^1.1.0",
+    "mp3": "git://github.com/DeusExLibris/mp3.js.git#04bae9bf9d57a1026a8eed365f48a79d25d6cf98",
     "nconf": "^0.8.4",
     "spotify-web": "git://github.com/sciencepro/node-spotify-web.git#0a9e6bfc3ec53052101c61b4a1bfe550caaf99d6",
     "xml2js": "^0.4.16"

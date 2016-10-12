@@ -10,6 +10,7 @@ const EventEmitter = require('events').EventEmitter
 const util = require('util')
 const fs = require('fs')
 const xml2js = require('xml2js')
+const limiter = require('limiter')
 
 // Load up configuration
 const nconf = require('nconf').file({file: getUserHome() + '/kruna-settings.json'})
@@ -166,17 +167,72 @@ function SpotifySource(track) {
    // Save the track
    this.track = track
    // Keep a stream we will get buffers from
-   this.play_stream = null;
+   this.play_stream = null
    
    // Define a min size for the first buffer, because Aurora cries if it's too
    // small to guess the filetype.
-   this.min_buffer_size = 16384 * 20;
+   this.min_buffer_size = 16384 * 20
    
-   // And keep a buffer to put stuff in
-   this.buffer = new Buffer(0);
+   // Keep a list of buffers
+   this.buffers = []
+   // And track the number of bytes in them
+   this.buffer_size = 0
+   
+   // We don't want to be running all the time, so we rate limit the passing of
+   // chunks to the player. This is 1 call every 100 ms.
+   this.limiter = new limiter.RateLimiter(1, 100)
+   
+   // This records whether a buffer flush is queued to happen when the rate
+   // limiter makes it possible.
+   this.flush_queued = false;
    
    console.log('SpotifySource: created')
 };
+
+SpotifySource.prototype.flush = function() {
+    // Send data in the buffer to the player.
+    
+    // Record that no more flush is queued
+    this.flush_queued = false
+    
+    // We want to send just one buffer to the player.
+    var finalBuffer
+    
+    if(this.buffers.length == 0) {
+        // Nothing to do!
+        return
+    }
+    
+    if(this.min_buffer_size > 0) {
+        // We want to glom buffers together
+        if(this.buffers.length == 1) {
+            // We're going to send just the one buffer we have
+            finalBuffer = new AV.Buffer(this.buffers[0])
+        } else {
+            // Concatenate and Aurora-ify all the buffers we have
+            finalBuffer = new AV.Buffer(Buffer.concat(this.buffers))
+        }
+    
+        console.log('SpotifySource: emitting %d bytes', finalBuffer.length)
+        
+        this.emit('data', finalBuffer)
+        
+        // Don't wait for big chunks anymore, just flush periodically.
+        this.min_buffer_size = 0
+    } else {
+        // We emit all the buffers, but all at once
+        console.log('SpotifySource: emitting %d buffers', this.buffers.length)
+        for(var i = 0; i < this.buffers.length; i++) {
+            // Emit each buffer as data
+            this.emit('data', new AV.Buffer(this.buffers[i]))
+        }
+    }
+    
+    // Now we hold no data
+    this.buffers = []
+    this.buffer_size = 0
+        
+}
 
 SpotifySource.prototype.start = function() {
     console.log('SpotifySource: starting')
@@ -189,27 +245,28 @@ SpotifySource.prototype.start = function() {
     // Otherwise start up the play stream
     this.play_stream = this.track.play()
     
+    // Wait for a big enough first chunk
+    this.min_buffer_size = 16384 * 20
+    
     // Forward data events
     // TODO: maybe make chunks bigger
     this.play_stream.on('data', (chunk) => {
-        //console.log('SpotifySource: %d bytes in chunk', chunk.length)
+        // Hold on to the buffer
+        this.buffers.push(chunk)
+        this.buffer_size += chunk.length
         
-        // Concatenate new data with any data we had been holding
-        if(this.buffer !== null) {
-            this.buffer = Buffer.concat([this.buffer, chunk])
-        } else {
-            this.buffer = chunk
-        }
-        
-        if(this.buffer.length >= this.min_buffer_size) {
-            // Spit out this data and empty our internal buffer
-            console.log('SpotifySource: emitting %d bytes', this.buffer.length)
-            
-            // We need to convert from Node buffers to Aurora buffers
-            this.emit('data', new AV.Buffer(this.buffer))
-            this.buffer = null
-        } else {
-            //console.log('SpotifySource: only have %d bytes. Waiting...', this.buffer.length)
+        if(this.buffer_size > this.min_buffer_size) {
+            // We have enough data that we would want to flush.
+            if(!this.flush_queued) {
+                // Queue up a request to flush the buffers to the player.
+                this.flush_queued = true
+                
+                this.limiter.removeTokens(1, (err, remainingRequests) => {
+                    // When it's late enough to actually flush, do it.
+                    this.flush()
+                })
+                            
+            }
         }
     })
     
@@ -224,16 +281,24 @@ SpotifySource.prototype.start = function() {
         console.log('SpotifySource: end of stream')
         
         // Emit any remaining data
-        if(this.buffer !== null && this.buffer.length > 0) {
-            console.log('SpotifySource: emitting %d final bytes', this.buffer.length)
+        if(!this.flush_queued) {
+            // Queue up a request to flush the buffers to the player.
+            this.flush_queued = true
             
-            // We need to convert from Node buffers to Aurora buffers
-            this.emit('data', new AV.Buffer(this.buffer))
-            this.buffer = null
-            
+            this.limiter.removeTokens(1, (err, remainingRequests) => {
+                // When it's late enough to actually flush, do it.
+                this.flush()
+                this.emit('progress', 100)
+                this.emit('end')
+            })
+                        
+        } else {
+            // A flush is already queued. After that, say we're ending the stream.
+            this.limiter.removeTokens(1, (err, remainingRequests) => {
+                this.emit('progress', 100)
+                this.emit('end')
+            })
         }
-        this.emit('progress', 100)
-        this.emit('end')
     })
     
     // TODO: compute progress
@@ -244,6 +309,8 @@ SpotifySource.prototype.pause = function() {
     if(this.play_stream !== null) {
         // We have somthing to pause
         this.play_stream.pause()
+        
+        // TODO: can we cancel the flush callback?
     }
 }
 
@@ -256,7 +323,10 @@ SpotifySource.prototype.reset = function() {
         // Null out the stream so start will do its work over again
         this.play_stream = null
         // And clear out the buffer so we don't stick bogus data at the front of what comes next.
-        this.buffer = new Buffer(0);
+        this.buffers = []
+        this.buffer_size = 0
+        
+        // TODO: can we cancel the flush callback?
     }
 }
 
@@ -324,8 +394,12 @@ ipc.on('player-url', (event, url, playNow) => {
         player.preload()
         
         if(playNow) {
-            // Play only if instructed.
-            player.play()
+            asset.on('duration', () => {
+                // Play only if instructed, and only after duration has been
+                // decoded (and we have the audio data ready to hand)
+                console.log('Making play call')
+                player.play()
+            })
         }
         
         
